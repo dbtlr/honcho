@@ -434,6 +434,28 @@ Examples:
 - `METRICS_ENABLED` - Enable Prometheus metrics
 - `TELEMETRY_ENABLED` - Enable CloudEvents telemetry
 
+### Embedding dimensions
+
+`EMBEDDING_VECTOR_DIMENSIONS` controls the dimensionality Honcho expects from
+the configured embedding model and stores in the configured vector store. Honcho
+always validates returned vector length against this value.
+
+Gemini embeddings request this dimensionality from the provider automatically.
+For OpenAI-compatible embedding endpoints that accept the `dimensions` request
+parameter, set `EMBEDDING_REQUEST_DIMENSIONS=true` to pass
+`EMBEDDING_VECTOR_DIMENSIONS` with each embedding request.
+
+For example, an OpenAI-compatible local embedding server can be configured with:
+
+```env
+EMBEDDING_VECTOR_DIMENSIONS=1536
+EMBEDDING_REQUEST_DIMENSIONS=true
+EMBEDDING_MODEL_CONFIG__TRANSPORT=openai
+EMBEDDING_MODEL_CONFIG__MODEL=your-embedding-model
+EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL=http://localhost:11434/v1
+EMBEDDING_MODEL_CONFIG__OVERRIDES__API_KEY=local-dev-key
+```
+
 ### Configuration Priority
 
 When a configuration value is set in multiple places, Honcho uses this priority:

@@ -348,6 +348,7 @@ def test_env_template_uses_nested_model_config_keys() -> None:
 
     assert "EMBEDDING_MODEL_CONFIG__MODEL" in env_template
     assert "EMBEDDING_VECTOR_DIMENSIONS" in env_template
+    assert "EMBEDDING_REQUEST_DIMENSIONS" in env_template
     assert "DERIVER_MODEL_CONFIG__MODEL" in env_template
     assert "DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL" in env_template
     assert "SUMMARY_MODEL_CONFIG__MODEL" in env_template

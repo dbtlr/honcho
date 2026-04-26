@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -12,17 +12,22 @@ class FakeOpenAIEmbeddingsAPI:
         self.embedding: list[float] = embedding
         self.calls: list[dict[str, Any]] = []
 
-    async def create(self, *, model: str, input: str | list[str]) -> SimpleNamespace:
-        self.calls.append({"model": model, "input": input})
+    async def create(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs.copy())
+        input = kwargs["input"]
         if isinstance(input, list):
-            data = [SimpleNamespace(embedding=self.embedding) for _ in input]
+            input_list = cast(list[object], input)
+            data = [
+                SimpleNamespace(embedding=self.embedding)
+                for _index in range(len(input_list))
+            ]
         else:
             data = [SimpleNamespace(embedding=self.embedding)]
         return SimpleNamespace(data=data)
 
 
 @pytest.mark.asyncio
-async def test_openai_embedding_client_uses_configured_model_and_dimensions(
+async def test_openai_embedding_client_uses_configured_model_without_dimensions_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_embeddings = FakeOpenAIEmbeddingsAPI([0.1] * 8)
@@ -52,6 +57,79 @@ async def test_openai_embedding_client_uses_configured_model_and_dimensions(
     assert embedding == [0.1] * 8
     assert fake_embeddings.calls == [
         {"model": "text-embedding-3-small", "input": ["hello world"]}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_openai_embedding_client_uses_dimensions_for_batch_methods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_embeddings = FakeOpenAIEmbeddingsAPI([0.1] * 8)
+
+    class FakeOpenAIClient:
+        def __init__(self, *, api_key: str | None, base_url: str | None) -> None:
+            self.embeddings: FakeOpenAIEmbeddingsAPI = fake_embeddings
+
+    monkeypatch.setattr("src.embedding_client.AsyncOpenAI", FakeOpenAIClient)
+
+    client = _EmbeddingClient(
+        EmbeddingModelConfig(
+            transport="openai",
+            model="qwen3-embedding:8b",
+            api_key="test-key",
+            base_url="http://localhost:11434/v1",
+        ),
+        vector_dimensions=8,
+        request_dimensions=True,
+        max_input_tokens=8192,
+        max_tokens_per_request=300_000,
+    )
+
+    simple_embeddings = await client.simple_batch_embed(["hello", "world"])
+    batch_embeddings = await client.batch_embed(
+        {
+            "first": ("hello", client.encoding.encode("hello")),
+            "second": ("world", client.encoding.encode("world")),
+        }
+    )
+
+    assert simple_embeddings == [[0.1] * 8, [0.1] * 8]
+    assert batch_embeddings == {"first": [[0.1] * 8], "second": [[0.1] * 8]}
+    assert fake_embeddings.calls == [
+        {"model": "qwen3-embedding:8b", "input": ["hello", "world"], "dimensions": 8},
+        {"model": "qwen3-embedding:8b", "input": ["hello", "world"], "dimensions": 8},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_openai_embedding_client_uses_dimensions_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_embeddings = FakeOpenAIEmbeddingsAPI([0.1] * 8)
+
+    class FakeOpenAIClient:
+        def __init__(self, *, api_key: str | None, base_url: str | None) -> None:
+            self.embeddings: FakeOpenAIEmbeddingsAPI = fake_embeddings
+
+    monkeypatch.setattr("src.embedding_client.AsyncOpenAI", FakeOpenAIClient)
+
+    client = _EmbeddingClient(
+        EmbeddingModelConfig(
+            transport="openai",
+            model="qwen3-embedding:8b",
+            api_key="test-key",
+        ),
+        vector_dimensions=8,
+        request_dimensions=True,
+        max_input_tokens=8192,
+        max_tokens_per_request=300_000,
+    )
+
+    embedding = await client.embed("hello world")
+
+    assert embedding == [0.1] * 8
+    assert fake_embeddings.calls == [
+        {"model": "qwen3-embedding:8b", "input": ["hello world"], "dimensions": 8},
     ]
 
 
